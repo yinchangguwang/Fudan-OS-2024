@@ -19,6 +19,9 @@ void main() {
 
         /* initialize kernel memory allocator */
         kinit();
+        
+        /* @todo: Print "Hello, world! (Core 0)" */
+        printk("Hello, world! (Core 0)\n");
 
         arch_fence();
 
@@ -27,6 +30,9 @@ void main() {
     } else {
         while (!boot_secondary_cpus);
         arch_fence();
+    
+        /* @todo: Print "Hello, world! (Core <core id>)" */
+        printk("Hello, world! (Core %llu)\n", cpuid());
     }
 
     set_return_addr(idle_entry);
