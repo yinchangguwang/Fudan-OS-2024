@@ -34,6 +34,9 @@ void main()
 
         /* initialize kernel memory allocator */
         kinit();
+        
+        /* @todo: Print "Hello, world! (Core 0)" */
+        printk("Hello, world! (Core 0)\n");
 
         /* initialize kernel proc */
         init_kproc();
@@ -53,6 +56,9 @@ void main()
         arch_fence();
         timer_init_percpu();
         gicv3_init_percpu();
+    
+        /* @todo: Print "Hello, world! (Core <core id>)" */
+        printk("Hello, world! (Core %llu)\n", cpuid());
     }
 
     set_return_addr(idle_entry);
