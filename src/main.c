@@ -38,11 +38,11 @@ void main()
         /* @todo: Print "Hello, world! (Core 0)" */
         printk("Hello, world! (Core 0)\n");
 
-        /* initialize kernel proc */
-        init_kproc();
-
         /* initialize sched */
         init_sched();
+
+        /* initialize kernel proc */
+        init_kproc();
 
         smp_init();
 
