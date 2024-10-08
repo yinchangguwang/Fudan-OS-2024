@@ -107,7 +107,8 @@ void* kalloc(unsigned long long size) {
                 // printk("find\n");
                 break;
             }
-            else if(((u64)h % alignment != 0) && (h->size >= (u16)size + (temp - (u64)h - sizeof(node)) + (u16)sizeof(node))){
+            else if(((u64)h % alignment != 0) 
+            && (h->size >= (u16)size + (temp - (u64)h - sizeof(node)) + (u16)sizeof(node))){
                 // printk("split\n");
                 node* p = (node*)temp;
                 p->size = h->size - (temp - (u64)h - sizeof(node)) - sizeof(node);
