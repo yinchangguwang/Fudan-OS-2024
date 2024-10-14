@@ -10,15 +10,24 @@ enum procstate { UNUSED, RUNNABLE, RUNNING, SLEEPING, ZOMBIE };
 
 typedef struct UserContext {
     // TODO: customize your trap frame
+    // u64 q00, q01;
+    // u64 tpidr, useless;
+    // u64 spsr, elr, lr, sp;
+    // u64 x[32];
+    u64 spsr, elr;
+    u64 x[18];
 } UserContext;
 
 typedef struct KernelContext {
     // TODO: customize your context
+    u64 lr, x0, x1;
+    u64 x[11]; // x19-29
 } KernelContext;
 
 // embeded data for procs
 struct schinfo {
     // TODO: customize your sched info
+    ListNode rq;
 };
 
 typedef struct Proc {
@@ -45,3 +54,19 @@ int start_proc(Proc *, void (*entry)(u64), u64 arg);
 NO_RETURN void exit(int code);
 int wait(int *exitcode);
 int kill(int pid);
+
+
+
+typedef struct pid_node {
+    int pid;
+    ListNode node;
+} PIDNode;
+
+typedef struct pid_manager {
+    int max_pid;
+    PIDNode freepid;
+} PIDManager;
+
+void init_pidmanager(PIDManager* manager);
+int get_pid(PIDManager* manager);
+void reuse_pid(PIDManager* manager, int pid);
