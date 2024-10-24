@@ -66,9 +66,12 @@ void init_proc(Proc *p)
     init_sem(&p->childexit, 0);
     init_list_node(&p->children);
     init_list_node(&p->ptnode);
+    p->killed = 0;
+    p->idle = 0;
     p->parent = NULL;
     p->kstack = kalloc_page();
     init_schinfo(&p->schinfo);
+    init_pgdir(&p->pgdir);
     p->kcontext = (KernelContext*)((u64)p->kstack + PAGE_SIZE - 16 - sizeof(KernelContext) - sizeof(UserContext));
     p->ucontext = (UserContext*)((u64)p->kstack + PAGE_SIZE - 16 - sizeof(UserContext));
     release_spinlock(&plock);
@@ -193,6 +196,7 @@ NO_RETURN void exit(int code)
         }
         acquire_sched_lock();
     }
+    free_pgdir(&this->pgdir);
     release_sched_lock();
     post_sem(&thisproc()->parent->childexit);
     acquire_sched_lock();
@@ -201,9 +205,35 @@ NO_RETURN void exit(int code)
     PANIC(); // prevent the warning of 'no_return function returns'
 }
 
+Proc* find_proc(int pid, Proc* current){
+    if(current->pid == pid && !is_unused(current)){
+        return current;
+    }
+    _for_in_list(p, &current->children){
+        if(p == &current->children){
+            continue;
+        }
+        auto child = container_of(p, Proc, ptnode);
+        Proc* temp = find_proc(pid, child);
+        if(temp != NULL){
+            return temp;
+        }
+    }
+    return NULL;
+}
+
 int kill(int pid)
 {
     // TODO:
     // Set the killed flag of the proc to true and return 0.
     // Return -1 if the pid is invalid (proc not found).
+    acquire_spinlock(&plock);
+    Proc* tokill = find_proc(pid, &root_proc);
+    release_spinlock(&plock);
+    if(tokill != NULL && ((tokill->ucontext->elr) >> 48) == 0){
+        tokill->killed = 1;
+        activate_proc(tokill);
+        return 0;
+    }
+    return -1;
 }

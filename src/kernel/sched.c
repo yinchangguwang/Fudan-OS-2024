@@ -12,6 +12,13 @@ extern void swtch(KernelContext *new_ctx, KernelContext **old_ctx);
 
 static SpinLock sched_lock;
 ListNode rq;
+static struct timer sched_timer[NCPU];
+
+void timer_handler(struct timer* _timer){
+    _timer->data = 0;
+    acquire_sched_lock();
+    sched(RUNNABLE);
+}
 
 void init_sched()
 {
@@ -20,6 +27,12 @@ void init_sched()
     // 2. initialize the scheduler info of each CPU
     init_spinlock(&sched_lock);
     init_list_node(&rq);
+    for(int i = 0; i < NCPU; i++){
+        sched_timer[i].triggered = 1;
+        sched_timer[i].elapse = 5;
+        sched_timer[i].handler = &timer_handler;
+        sched_timer[i].data = i;
+    }
     for(int i = 0; i < NCPU; i++){
         Proc* p = kalloc(sizeof(Proc));
         p->idle = 1;
@@ -77,7 +90,7 @@ bool activate_proc(Proc *p)
     // if the proc->state if SLEEPING/UNUSED, set the process state to RUNNABLE and add it to the sched queue
     // else: panic
     acquire_sched_lock();
-    if(p->state == RUNNING || p->state == RUNNABLE){
+    if(p->state == RUNNING || p->state == RUNNABLE || p->state == ZOMBIE){
         release_sched_lock();
         return false;
     }
@@ -85,9 +98,9 @@ bool activate_proc(Proc *p)
         p->state = RUNNABLE;
         _insert_into_list(&rq, &p->schinfo.rq);
     }
-    else{
-        PANIC();
-    }
+    // else{
+    //     PANIC();
+    // }
     release_sched_lock();
     return true;
 }
@@ -102,8 +115,8 @@ static void update_this_state(enum procstate new_state)
     }
     this->state = new_state;
     if((this != cpus[cpuid()].sched.idle) && (this->state == RUNNING || this->state == RUNNABLE)){
-        // _insert_into_list(rq.prev, &this->schinfo.rq);
-        _insert_into_list(&rq, &this->schinfo.rq);
+        _insert_into_list(rq.prev, &this->schinfo.rq);
+        // _insert_into_list(&rq, &this->schinfo.rq);
     }
 }
 
@@ -131,6 +144,10 @@ static void update_this_proc(Proc *p)
     // TODO: you should implement this routinue
     // update thisproc to the choosen process
     cpus[cpuid()].sched.thisproc = p;
+    if(!sched_timer[cpuid()].triggered){
+        cancel_cpu_timer(&sched_timer[cpuid()]);
+    }
+    set_cpu_timer(&sched_timer[cpuid()]);
 }
 
 // A simple scheduler.
@@ -140,6 +157,10 @@ void sched(enum procstate new_state)
 {
     auto this = thisproc();
     ASSERT(this->state == RUNNING);
+    if(this->killed && new_state != ZOMBIE){
+        release_sched_lock();
+        return;
+    }
     update_this_state(new_state);
     auto next = pick_next();
     update_this_proc(next);
