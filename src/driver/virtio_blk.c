@@ -115,7 +115,9 @@ int virtio_blk_rw(Buf *b)
     arch_fence();
 
     /* LAB 4 TODO 1 BEGIN */
-    
+    release_spinlock(&disk.lk);
+    wait_sem(&b->sem);
+    acquire_spinlock(&disk.lk);
     /* LAB 4 TODO 1 END */
 
     disk.virtq.info[d0].done = 0;
@@ -139,7 +141,8 @@ static void virtio_blk_intr()
         }
 
         /* LAB 4 TODO 2 BEGIN */
-    
+        Buf* b = (Buf*)((void*)disk.virtq.info[d0].buf - offset_of(Buf, data));
+        post_sem(&b->sem);
         /* LAB 4 TODO 2 END */
 
         disk.virtq.info[d0].buf = NULL;
