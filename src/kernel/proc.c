@@ -232,7 +232,7 @@ int kill(int pid)
     release_spinlock(&plock);
     if(tokill != NULL && ((tokill->ucontext->elr) >> 48) == 0){
         tokill->killed = 1;
-        activate_proc(tokill);
+        alert_proc(tokill);
         return 0;
     }
     return -1;

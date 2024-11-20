@@ -116,7 +116,7 @@ int virtio_blk_rw(Buf *b)
 
     /* LAB 4 TODO 1 BEGIN */
     release_spinlock(&disk.lk);
-    wait_sem(&b->sem);
+    while(!wait_sem(&b->sem));
     acquire_spinlock(&disk.lk);
     /* LAB 4 TODO 1 END */
 
