@@ -61,7 +61,6 @@ struct {
     /* your fields here */
     SpinLock lock;
     Semaphore sem;
-    Semaphore check;
     bool iscommit;
     usize outstanding;
 } log;
@@ -114,7 +113,7 @@ static Block *cache_acquire(usize block_no) {
     Block* blk = NULL;
     _for_in_list(p, &head){
         if(p == &head){
-            break;
+            continue;
         }
         Block* curr = container_of(p, Block, node);
         if(curr->block_no == block_no){
@@ -135,6 +134,7 @@ static Block *cache_acquire(usize block_no) {
         release_spinlock(&lock);
         return blk;
     }
+    // if acquired block is not in cache
     // if the number of cached blocks is no less than this threshold
     if(block_num >= EVICTION_THRESHOLD){
         ListNode* p = head.prev;
@@ -146,7 +146,7 @@ static Block *cache_acquire(usize block_no) {
             Block* curr = container_of(p, Block, node);
             if(!curr->acquired && !curr->pinned){
                 block_num--;
-                _detach_from_list(p);
+                _detach_from_list(&curr->node);
                 kfree(curr);
             }
             p = q;
@@ -228,9 +228,6 @@ static void cache_end_op(OpContext *ctx) {
     if(log.outstanding > 0){
         post_sem(&log.sem);
         release_spinlock(&log.lock);
-        if(!wait_sem(&log.check)){
-            return;
-        }
         return;
     }
     log.iscommit = 1;
@@ -238,7 +235,7 @@ static void cache_end_op(OpContext *ctx) {
         release_spinlock(&log.lock);
         Block* from = cache_acquire(header.block_no[i]);
         Block* to = cache_acquire(sblock->log_start + 1 + i);
-        for(int j = 0; j < BLOCK_SIZE; j++){
+        for(usize j = 0; j < BLOCK_SIZE; j++){
             to->data[j] = from->data[j];
         }
         cache_sync(NULL, to);
@@ -261,7 +258,6 @@ static void cache_end_op(OpContext *ctx) {
     acquire_spinlock(&log.lock);
     log.iscommit = 0;
     post_all_sem(&log.sem);
-    post_all_sem(&log.check);
     release_spinlock(&log.lock);
     return (void)ctx;
 }
@@ -280,13 +276,12 @@ void init_bcache(const SuperBlock *_sblock, const BlockDevice *_device) {
     header.num_blocks = 0;
     log.iscommit = 0;
     log.outstanding = 0;
-    init_sem(&log.check, 0);
     init_sem(&log.sem, 0);
     read_header();
     for(usize i = 0; i < header.num_blocks; i++){
         Block* from = cache_acquire(sblock->log_start + 1 + i);
         Block* to = cache_acquire(header.block_no[i]);
-        for(int j = 0; j < BLOCK_SIZE; j++){
+        for(usize j = 0; j < BLOCK_SIZE; j++){
             to->data[j] = from->data[j];
         }
         cache_sync(NULL, to);
@@ -303,24 +298,25 @@ static usize cache_alloc(OpContext *ctx) {
     // TODO
     acquire_spinlock(&bitmap_lock);
     for(usize block_start = 0; block_start < sblock->num_blocks; block_start += BLOCK_SIZE * 8){
-        Block* mp = cache_acquire(sblock->bitmap_start + (block_start / (BLOCK_SIZE * 8)));
-        for(usize add = 0; add < BLOCK_SIZE && block_start + add * 8 < sblock->num_blocks; add++){
-            int temp = mp->data[add];
-            for(usize i = 0; i < 8 && block_start + add * 8 + i < sblock->num_blocks; i++){
-                if((temp & (1 << i)) == 0){
-                    mp->data[add] |= (1 << i);
-                    cache_sync(ctx, mp);
-                    cache_release(mp);
-                    Block* blk = cache_acquire(block_start + add * 8 + i);
+        Block* map_blk = cache_acquire(sblock->bitmap_start + (block_start / (BLOCK_SIZE * 8)));
+        for(usize map_byte = 0; map_byte < BLOCK_SIZE && block_start + map_byte * 8 < sblock->num_blocks; map_byte++){
+            u8 temp = map_blk->data[map_byte];
+            for(usize map_bit = 0; map_bit < 8 && block_start + map_byte * 8 + map_bit < sblock->num_blocks; map_bit++){
+                // if find a '0' bit, means this block_no available
+                if((temp & (1 << map_bit)) == 0){
+                    map_blk->data[map_byte] += (1 << map_bit);  // set '1'
+                    cache_sync(ctx, map_blk);
+                    cache_release(map_blk);
+                    Block* blk = cache_acquire(block_start + map_byte * 8 + map_bit);
                     memset(blk->data, 0, BLOCK_SIZE);
                     cache_sync(ctx, blk);
                     cache_release(blk);
                     release_spinlock(&bitmap_lock);
-                    return block_start + add * 8 + i;
+                    return block_start + map_byte * 8 + map_bit;
                 }
             }
         }
-        cache_release(mp);
+        cache_release(map_blk);
     }
     release_spinlock(&bitmap_lock);
     PANIC();
@@ -330,11 +326,13 @@ static usize cache_alloc(OpContext *ctx) {
 static void cache_free(OpContext *ctx, usize block_no) {
     // TODO
     acquire_spinlock(&bitmap_lock);
-    Block* mp = cache_acquire(sblock->bitmap_start + block_no / (BLOCK_SIZE * 8));
-    int idx = block_no % (BLOCK_SIZE * 8);
-    mp->data[idx / 8] -= (1 << (idx % 8));
-    cache_sync(ctx, mp);
-    cache_release(mp);
+    // find corresponding bitmap block, byte and bit
+    Block* map_blk = cache_acquire(sblock->bitmap_start + block_no / (BLOCK_SIZE * 8));
+    usize map_byte = (block_no % (BLOCK_SIZE * 8)) / 8;
+    usize map_bit = (block_no % (BLOCK_SIZE * 8)) % 8;
+    map_blk->data[map_byte] -= (1 << map_bit);  // set '0'
+    cache_sync(ctx, map_blk);
+    cache_release(map_blk);
     release_spinlock(&bitmap_lock);
 }
 
