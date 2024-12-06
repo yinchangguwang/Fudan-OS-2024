@@ -358,30 +358,16 @@ static usize inode_insert(OpContext* ctx,
     ASSERT(entry->type == INODE_DIRECTORY);
 
     // TODO
-    usize offset = 0;
-    usize lookup = 0;
+    usize offset = entry->num_bytes;
     DirEntry curr;
-    if(&offset){
-        offset = INODE_MAX_BYTES;
-    }
     for(usize i = 0; i < entry->num_bytes; i += sizeof(DirEntry)) {
         inode_read(inode, (u8*)&curr, i, sizeof(DirEntry));
-        if(&offset && curr.inode_no == 0 && offset == INODE_MAX_BYTES) {
+        if(curr.inode_no == 0 && offset == entry->num_bytes) {
             offset = i;
         }
         if(curr.inode_no && memcmp(name, curr.name, MAX(strlen(name), strlen(curr.name))) == 0) {
-            if(&offset) {
-                offset = i;
-            }
-            lookup = curr.inode_no;
-            break;
+            return -1;
         }
-    }
-    if(lookup == 0 && &offset && offset == INODE_MAX_BYTES) {
-        offset = entry->num_bytes;
-    }
-    if(lookup != 0) {
-        return -1;
     }
     strncpy(curr.name, name, FILE_NAME_MAX_LENGTH);
     curr.inode_no = inode_no;
