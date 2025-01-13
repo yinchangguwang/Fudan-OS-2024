@@ -3,6 +3,8 @@
 #include <kernel/printk.h>
 #include <kernel/sched.h>
 #include <test/test.h>
+#include <common/buf.h>
+#include <driver/virtio.h>
 
 volatile bool panic_flag;
 
@@ -27,13 +29,20 @@ NO_RETURN void kernel_entry()
     init_filesystem();
 
     printk("Hello world! (Core %lld)\n", cpuid());
-    // proc_test();
+    proc_test();
     // vm_test();
     // user_proc_test();
     // io_test();
 
     /* LAB 4 TODO 3 BEGIN */
-    
+    Buf MBR_buf;
+    MBR_buf.flags = 0;
+    MBR_buf.block_no = 0;
+    virtio_blk_rw(&MBR_buf);
+
+    u32* LBA = (u32*)(MBR_buf.data + 0x1CE + 0x8);
+    u32* sectors = (u32*)(MBR_buf.data + 0x1CE + 0xC);
+    printk("LBA: %d, sectors: %d\n", *LBA, *sectors);
     /* LAB 4 TODO 3 END */
 
     /**
