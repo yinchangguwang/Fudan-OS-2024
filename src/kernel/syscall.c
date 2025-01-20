@@ -28,13 +28,6 @@ void syscall_entry(UserContext *context)
     // be sure to check the range of id. if id >= NR_SYSCALL, panic.
     u64 id = context->x[8];
     u64 ret = 0;
-    // if(id < NR_SYSCALL && syscall_table[id] != NULL){
-    //     ret = ((u64(*)(u64, u64, u64, u64, u64, u64))syscall_table[id])(context->x[0], context->x[1], context->x[2], context->x[3], context->x[4], context->x[5]);
-    //     context->x[0] = ret;
-    // }
-    // else if(id >= NR_SYSCALL){
-    //     PANIC();
-    // }
     if(id >= NR_SYSCALL){
         PANIC();
     }
@@ -50,7 +43,9 @@ void syscall_entry(UserContext *context)
  */
 bool user_readable(const void *start, usize size) {
     /* (Final) TODO BEGIN */
-
+    start = start;
+    size = size;
+    return true;
     /* (Final) TODO END */
 }
 
@@ -61,7 +56,15 @@ bool user_readable(const void *start, usize size) {
  */
 bool user_writeable(const void *start, usize size) {
     /* (Final) TODO Begin */
-
+    bool ret = true;
+    for(u64 i = (u64)start; i < (u64)start + size; i = (i / BLOCK_SIZE + 1) * BLOCK_SIZE){
+        auto pte = get_pte(&thisproc()->pgdir, i, false);
+        if(pte == NULL || ((*pte) & PTE_RO)){
+            ret = false;
+            break;
+        }
+    }
+    return ret;
     /* (Final) TODO End */
 }
 

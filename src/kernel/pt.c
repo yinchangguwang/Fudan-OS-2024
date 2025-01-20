@@ -2,6 +2,10 @@
 #include <common/string.h>
 #include <kernel/mem.h>
 #include <kernel/pt.h>
+#include <driver/memlayout.h>
+#include <aarch64/mmu.h>
+
+extern struct page refpage[PHYSTOP / PAGE_SIZE];
 
 PTEntriesPtr get_pte(struct pgdir *pgdir, u64 va, bool alloc)
 {
@@ -95,7 +99,11 @@ void attach_pgdir(struct pgdir *pgdir)
 void vmmap(struct pgdir *pd, u64 va, void *ka, u64 flags)
 {
     /* (Final) TODO BEGIN */
-
+    auto pte = get_pte(pd, va, true);
+    *pte = K2P(ka) | flags;
+    increment_rc(&refpage[K2P(ka) / PAGE_SIZE].ref);
+    attach_pgdir(pd);
+    arch_tlbi_vmalle1is();
     /* (Final) TODO END */
 }
 
@@ -107,6 +115,33 @@ void vmmap(struct pgdir *pd, u64 va, void *ka, u64 flags)
 int copyout(struct pgdir *pd, void *va, void *p, usize len)
 {
     /* (Final) TODO BEGIN */
-
+    void* page;
+    usize n, pgoff;
+    u64* pte;
+    if((usize)va + len > USERTOP){
+        return -1;
+    }
+    for(; len; len -=n, va += n) {
+        pgoff = (usize)va % PAGE_SIZE;
+        if((pte = get_pte(pd, (usize)va, true)) == NULL){
+            return -1;
+        }
+        if(*pte & PTE_VALID){
+            page = (void*)P2K(PTE_ADDRESS(*pte));
+        }else{
+            if((page = kalloc_page()) == NULL){
+                return -1;
+            }
+            *pte = K2P(page) | PTE_USER_DATA;
+        }
+        n = MIN(len, PAGE_SIZE - pgoff);
+        if(p){
+            memmove(page + pgoff, p, n);
+            p += n;
+        }else{
+            memset(page + pgoff, 0, n);
+        }
+    }
+    return 0;
     /* (Final) TODO END */
 }

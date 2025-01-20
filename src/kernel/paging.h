@@ -17,6 +17,8 @@ struct section {
     u64 end;
     ListNode stnode;
 
+    SleepLock sleepLock;
+
     /* The following fields are for the file-backed sections. */
 
     struct file *fp;

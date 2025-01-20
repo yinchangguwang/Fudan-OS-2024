@@ -1,6 +1,8 @@
 #pragma once
 
 #include <aarch64/mmu.h>
+#include <common/spinlock.h>
+#include <common/list.h>
 
 struct pgdir {
     PTEntriesPtr pt;

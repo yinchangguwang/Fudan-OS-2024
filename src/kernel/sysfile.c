@@ -37,7 +37,10 @@ struct iovec {
 static struct file *fd2file(int fd)
 {
     /* (Final) TODO BEGIN */
-    
+    if(fd < 0 || fd >= 16) {
+        return 0;
+    }
+    return (thisproc()->oftable.openfile[fd]);
     /* (Final) TODO END */
 }
 
@@ -48,7 +51,13 @@ static struct file *fd2file(int fd)
 int fdalloc(struct file *f)
 {
     /* (Final) TODO BEGIN */
-    
+    Proc* p = thisproc();
+    for(int fd = 0; fd < 16; fd++) {
+        if(p->oftable.openfile[fd] == 0) {
+            p->oftable.openfile[fd] = f;
+            return fd;
+        }
+    }
     /* (Final) TODO END */
     return -1;
 }
@@ -66,14 +75,20 @@ define_syscall(mmap, void *addr, int length, int prot, int flags, int fd,
                int offset)
 {
     /* (Final) TODO BEGIN */
-    
+    addr = addr;
+    length = length;
+    prot = prot;
+    flags = flags;
+    fd = fd;
+    offset = offset;
+    return 0;
     /* (Final) TODO END */
 }
 
 define_syscall(munmap, void *addr, size_t length)
 {
     /* (Final) TODO BEGIN */
-    
+    return (u64)addr + length;
     /* (Final) TODO END */
 }
 
@@ -123,7 +138,9 @@ define_syscall(writev, int fd, struct iovec *iov, int iovcnt)
 define_syscall(close, int fd)
 {
     /* (Final) TODO BEGIN */
-    
+    File* f = fd2file(fd);
+    thisproc()->oftable.openfile[fd] = NULL;
+    file_close(f);
     /* (Final) TODO END */
     return 0;
 }
@@ -261,9 +278,42 @@ Inode *create(const char *path, short type, short major, short minor,
               OpContext *ctx)
 {
     /* (Final) TODO BEGIN */
-    
+    Inode *ip, *dir;
+    char name[FILE_NAME_MAX_LENGTH];
+    dir = nameiparent(path, name, ctx);
+    if (dir == NULL) {
+        return NULL;
+    }
+    inodes.lock(dir);
+    ip = inodes.get(inodes.lookup(dir, name, NULL));
+    if (ip != NULL) {
+        inodes.unlock(dir);
+        inodes.put(ctx, dir);
+        inodes.lock(ip);
+        if(type == INODE_REGULAR && ip->entry.type == INODE_REGULAR) {
+            return ip;
+        }
+        inodes.unlock(ip);
+        inodes.put(ctx, ip);
+        return NULL;
+    }
+    ip = inodes.get(inodes.alloc(ctx, type));
+    inodes.lock(ip);
+    ip->entry.major = major;
+    ip->entry.minor = minor;
+    ip->entry.num_links = 1;
+    inodes.sync(ctx, ip, true);
+    if (type == INODE_DIRECTORY) {
+        dir->entry.num_links++;
+        inodes.sync(ctx, dir, true);
+        inodes.insert(ctx, ip, ".", ip->inode_no);
+        inodes.insert(ctx, ip, "..", dir->inode_no);
+    } 
+    inodes.insert(ctx, dir, name, ip->inode_no);
+    inodes.unlock(dir);
+    inodes.put(ctx, dir);
+    return ip;
     /* (Final) TODO END */
-    return 0;
 }
 
 define_syscall(openat, int dirfd, const char *path, int omode)
@@ -374,7 +424,27 @@ define_syscall(chdir, const char *path)
      * Change the cwd (current working dictionary) of current process to 'path'.
      * You may need to do some validations.
      */
-    
+    Inode *ip;
+    Proc *p = thisproc();
+    OpContext ctx;
+    bcache.begin_op(&ctx);
+    ip = namei(path, &ctx);
+    if(ip == NULL) {
+        bcache.end_op(&ctx);
+        return -1;
+    }
+    inodes.lock(ip);
+    if(ip->entry.type != INODE_DIRECTORY) {
+        inodes.unlock(ip);
+        inodes.put(&ctx, ip);
+        bcache.end_op(&ctx);
+        return -1;
+    }
+    inodes.unlock(ip);
+    inodes.put(&ctx, p->cwd);
+    bcache.end_op(&ctx);
+    p->cwd = ip;
+    return 0;
     /* (Final) TODO END */
 }
 
@@ -382,6 +452,25 @@ define_syscall(pipe2, int pipefd[2], int flags)
 {
 
     /* (Final) TODO BEGIN */
-    
+    File *rf, *wf;
+    if(flags){
+        return -1;
+    }
+    if(pipe_alloc(&rf, &wf) < 0){
+        return -1;
+    }
+    int rfd = fdalloc(rf);
+    int wfd = fdalloc(wf);
+    if(rfd < 0 || wfd < 0){
+        if(rfd >= 0){
+            thisproc()->oftable.openfile[rfd] = NULL;
+        }
+        file_close(rf);
+        file_close(wf);
+        return -1;
+    }
+    pipefd[0] = rfd;
+    pipefd[1] = wfd;
+    return 0;
     /* (Final) TODO END */
 }

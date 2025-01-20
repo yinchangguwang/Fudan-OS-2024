@@ -71,3 +71,6 @@ typedef struct pid_manager {
 void init_pidmanager(PIDManager* manager);
 int get_pid(PIDManager* manager);
 void reuse_pid(PIDManager* manager, int pid);
+
+
+void set_parent_to_this(Proc *);

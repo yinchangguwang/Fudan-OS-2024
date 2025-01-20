@@ -13,6 +13,7 @@ RefCount refpage[PHYSTOP / PAGE_SIZE];
 static QueueNode* pages;
 void* zero_page = 0;
 extern char end[];
+int pagenum = 0;
 
 typedef struct node
 {
@@ -28,6 +29,7 @@ void kinit() {
     init_spinlock(&memlock);
     for(u64 p = PAGE_BASE((u64)&end) + 2 * PAGE_SIZE; p < P2K(PHYSTOP); p += PAGE_SIZE){
         add_to_queue(&pages, (QueueNode*)p);
+        pagenum++;
     }
     zero_page = (void*)(PAGE_BASE((u64)&end) + PAGE_SIZE);
     memset(zero_page, 0, PAGE_SIZE);
@@ -148,6 +150,10 @@ void kfree(void* ptr) {
     release_spinlock(&memlock);
 }
 
-void* get_zero_page() {
-    return NULL;
+WARN_RESULT void* get_zero_page() {
+    return zero_page;
+}
+
+u64 left_page_cnt() {
+    return pagenum - kalloc_page_cnt.count;
 }

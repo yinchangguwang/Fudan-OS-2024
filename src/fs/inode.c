@@ -3,6 +3,10 @@
 #include <kernel/mem.h>
 #include <kernel/printk.h>
 
+#include <sys/stat.h>
+#include <kernel/sched.h>
+#include <kernel/console.h>
+
 /**
     @brief the private reference to the super block.
 
@@ -137,7 +141,10 @@ static void inode_sync(OpContext* ctx, Inode* inode, bool do_write) {
 
 // see `inode.h`.
 static Inode* inode_get(usize inode_no) {
+    // printk("enter inode_get\n");
     ASSERT(inode_no > 0);
+    // printk("inode_no: %lld\n", inode_no);
+    // printk("sblock num inodes: %d\n", sblock->num_inodes);
     ASSERT(inode_no < sblock->num_inodes);
     acquire_spinlock(&lock);
     // TODO
@@ -280,6 +287,10 @@ static usize inode_map(OpContext* ctx,
 // see `inode.h`.
 static usize inode_read(Inode* inode, u8* dest, usize offset, usize count) {
     InodeEntry* entry = &inode->entry;
+    if(inode->entry.type == INODE_DEVICE) {
+        ASSERT(inode->entry.major == 1);
+        return console_read(inode, (char*)dest, count);
+    }
     if (count + offset > entry->num_bytes)
         count = entry->num_bytes - offset;
     usize end = offset + count;
@@ -308,6 +319,10 @@ static usize inode_write(OpContext* ctx,
                          usize count) {
     InodeEntry* entry = &inode->entry;
     usize end = offset + count;
+    if(inode->entry.type == INODE_DEVICE) {
+        ASSERT(inode->entry.major == 1);
+        return console_write(inode, (char*)src, count);
+    }
     ASSERT(offset <= entry->num_bytes);
     ASSERT(end <= INODE_MAX_BYTES);
     ASSERT(offset <= end);
@@ -461,9 +476,50 @@ static Inode* namex(const char* path,
                     char* name,
                     OpContext* ctx) {
     /* (Final) TODO BEGIN */
-    
+    Inode *ans;
+    // Inode *next;
+    if(*path == '/') {
+        ans = inode_get(ROOT_INODE_NO);
+    }else {
+        ans = inode_share(thisproc()->cwd);
+    }
+    while((path = skipelem(path, name)) != NULL) {
+        inode_lock(ans);
+        if(ans->entry.type != INODE_DIRECTORY) {
+            inode_unlock(ans);
+            inode_put(ctx, ans);
+            return NULL;
+        }
+        if(nameiparent && *path == '\0') {
+            inode_unlock(ans);
+            return ans;
+        }
+        // next = inode_get(inode_lookup(ans, name, 0));
+        // if(next == NULL) {
+        //     inode_unlock(ans);
+        //     inode_put(ctx, ans);
+        //     return NULL;
+        // }
+        // inode_unlock(ans);
+        // inode_put(ctx, ans);
+        // ans = next;
+        usize inode_no = inode_lookup(ans, name, 0);
+        printk("inode_no: %lld\n", inode_no);
+        if(inode_no == 0) {
+            inode_unlock(ans);
+            inode_put(ctx, ans);
+            return NULL;
+        }
+        inode_unlock(ans);
+        inode_put(ctx, ans);
+        ans = inode_get(inode_no);
+    }
+    if(nameiparent) {
+        inode_put(ctx, ans);
+        return NULL;
+    }
+    return ans;
     /* (Final) TODO END */
-    return 0;
 }
 
 Inode* namei(const char* path, OpContext* ctx) {

@@ -44,6 +44,9 @@ static u8 sblock_data[BLOCK_SIZE];
 BlockDevice block_device;
 
 void init_block_device() {
+    sd_read(0, sblock_data);
+    u32 lba = *(u32 *)(sblock_data + 0x1CE + 0x8);
+    sd_read(lba + 1, sblock_data);
     block_device.read = sd_read;
     block_device.write = sd_write;
 }
