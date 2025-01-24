@@ -18,3 +18,5 @@ void console_init();
 void console_intr(char c);
 isize console_write(Inode *ip, char *buf, isize n);
 isize console_read(Inode *ip, char *dst, isize n);
+
+void console_intr2();

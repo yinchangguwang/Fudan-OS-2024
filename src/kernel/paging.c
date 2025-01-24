@@ -12,6 +12,8 @@
 #include <kernel/pt.h>
 #include <kernel/sched.h>
 
+#define MASK (-(1 << 12))
+#define CLEAN(addr) (addr & MASK)
 
 void init_sections(ListNode *section_head) {
     /* (Final) TODO BEGIN */
@@ -46,11 +48,11 @@ u64 sbrk(i64 size) {
     u64 ans = sec->end;
     sec->end += size * PAGE_SIZE;
     if(size < 0){
-        for(auto i = 0; i < -size; i++){
-            auto pte = get_pte(pd, sec->end + i * PAGE_SIZE, 0);
+        for(i64 i = 0; i < -size; i++){
+            auto pte = get_pte(pd, sec->end + i * PAGE_SIZE, false);
             if(pte && (*pte)){
-                kfree_page((void*)P2K((*pte) & (-(1 << 12))));
-                *pte = 0;
+                kfree_page((void*)(P2K(CLEAN(*pte))));
+                *pte = NULL;
             }
         }
     }
@@ -70,14 +72,17 @@ void* alloc_page_for_user(){
 void swapin(struct pgdir *pd, struct section *sec) {
     ASSERT(sec->flags & ST_SWAP);
     unalertable_wait_sem(&sec->sleepLock);
-    for(u64 i = sec->begin; i < sec->end; i += PAGE_SIZE){
+    u64 begin = sec->begin;
+    u64 end = sec->end;
+    for(u64 i = begin; i < end; i += PAGE_SIZE){
         auto pte = get_pte(pd, i, 0);
         if(pte && (*pte)) {
             u32 bno = (*pte);
             void* newpage = alloc_page_for_user();
-            for(int i = 0; i < 8; i++){
-                block_device.read((u32)bno + i, (u8*)newpage + i * BLOCK_SIZE);
-            }
+            read_page_from_disk(newpage,(u32)bno);
+            // for(int i = 0; i < 8; i++){
+            //     block_device.read((u32)bno + i, (u8*)newpage + i * BLOCK_SIZE);
+            // }
             *pte = K2P(newpage) | PTE_USER_DATA;
             release_8_blocks(bno);
         }
@@ -124,7 +129,7 @@ int pgfault_handler(u64 iss) {
         auto p = alloc_page_for_user();
         kfree_page((void*)P2K(PTE_ADDRESS(*pte)));
         memmove(p, (void*)P2K(PTE_ADDRESS(*pte)), PAGE_SIZE);
-        // ASSERT(p != NULL);
+        ASSERT(p != NULL);
         // ASSERT(check_zero_page());
         *pte = K2P(p) | PTE_USER_DATA;
     }else if(!(*pte & PTE_VALID) && (sec->flags & ST_SWAP)){

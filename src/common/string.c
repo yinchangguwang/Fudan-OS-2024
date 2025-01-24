@@ -1,4 +1,5 @@
 #include <common/string.h>
+#include <kernel/printk.h>
 
 void *memset(void *s, int c, usize n)
 {

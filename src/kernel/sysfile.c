@@ -37,8 +37,9 @@ struct iovec {
 static struct file *fd2file(int fd)
 {
     /* (Final) TODO BEGIN */
+    // printk("in fd2file\n");
     if(fd < 0 || fd >= 16) {
-        return 0;
+        return NULL;
     }
     return (thisproc()->oftable.openfile[fd]);
     /* (Final) TODO END */
@@ -51,11 +52,19 @@ static struct file *fd2file(int fd)
 int fdalloc(struct file *f)
 {
     /* (Final) TODO BEGIN */
-    Proc* p = thisproc();
-    for(int fd = 0; fd < 16; fd++) {
-        if(p->oftable.openfile[fd] == 0) {
-            p->oftable.openfile[fd] = f;
-            return fd;
+    // printk("in fdalloc\n");
+    // Proc* p = thisproc();
+    // for(int fd = 0; fd < 16; fd++) {
+    //     if(p->oftable.openfile[fd] == 0) {
+    //         p->oftable.openfile[fd] = f;
+    //         return fd;
+    //     }
+    // }
+    struct oftable* ft = &(thisproc()->oftable);
+    for(int i = 0; i < 16; i++) {
+        if(ft->openfile[i] == NULL) {
+            ft->openfile[i] = f;
+            return i;
         }
     }
     /* (Final) TODO END */
@@ -66,6 +75,7 @@ define_syscall(ioctl, int fd, u64 request)
 {
     // 0x5413 is TIOCGWINSZ (I/O Control to Get the WINdow SIZe, a magic request
     // to get the stdin terminal size) in our implementation. Just ignore it.
+    // printk("in syscall ioctl\n");
     ASSERT(request == 0x5413);
     (void)fd;
     return 0;
@@ -75,6 +85,7 @@ define_syscall(mmap, void *addr, int length, int prot, int flags, int fd,
                int offset)
 {
     /* (Final) TODO BEGIN */
+    // printk("in syscall mmap\n");
     addr = addr;
     length = length;
     prot = prot;
@@ -88,12 +99,14 @@ define_syscall(mmap, void *addr, int length, int prot, int flags, int fd,
 define_syscall(munmap, void *addr, size_t length)
 {
     /* (Final) TODO BEGIN */
+    // printk("in syscall munmap\n");
     return (u64)addr + length;
     /* (Final) TODO END */
 }
 
 define_syscall(dup, int fd)
 {
+    // printk("in syscall dup\n");
     struct file *f = fd2file(fd);
     if (!f)
         return -1;
@@ -106,6 +119,7 @@ define_syscall(dup, int fd)
 
 define_syscall(read, int fd, char *buffer, int size)
 {
+    // printk("in syscall read\n");
     struct file *f = fd2file(fd);
     if (!f || size <= 0 || !user_writeable(buffer, size))
         return -1;
@@ -114,6 +128,7 @@ define_syscall(read, int fd, char *buffer, int size)
 
 define_syscall(write, int fd, char *buffer, int size)
 {
+    // printk("in syscall write\n");
     struct file *f = fd2file(fd);
     if (!f || size <= 0 || !user_readable(buffer, size))
         return -1;
@@ -122,6 +137,7 @@ define_syscall(write, int fd, char *buffer, int size)
 
 define_syscall(writev, int fd, struct iovec *iov, int iovcnt)
 {
+    // printk("in syscall writev\n");
     struct file *f = fd2file(fd);
     struct iovec *p;
     if (!f || iovcnt <= 0 || !user_readable(iov, sizeof(struct iovec) * iovcnt))
@@ -147,6 +163,7 @@ define_syscall(close, int fd)
 
 define_syscall(fstat, int fd, struct stat *st)
 {
+    // printk("in syscall fstat\n");
     struct file *f = fd2file(fd);
     if (!f || !user_writeable(st, sizeof(*st)))
         return -1;
@@ -156,6 +173,7 @@ define_syscall(fstat, int fd, struct stat *st)
 define_syscall(newfstatat, int dirfd, const char *path, struct stat *st,
                int flags)
 {
+    // printk("in syscall newfstatat\n");
     if (!user_strlen(path, 256) || !user_writeable(st, sizeof(*st)))
         return -1;
     if (dirfd != AT_FDCWD) {
@@ -185,6 +203,7 @@ define_syscall(newfstatat, int dirfd, const char *path, struct stat *st,
 
 static int isdirempty(Inode *dp)
 {
+    // printk("in isdirempty\n");
     usize off;
     DirEntry de;
 
@@ -199,6 +218,7 @@ static int isdirempty(Inode *dp)
 
 define_syscall(unlinkat, int fd, const char *path, int flag)
 {
+    // printk("in syscall unlinkat\n");
     ASSERT(fd == AT_FDCWD && flag == 0);
     Inode *ip, *dp;
     DirEntry de;
@@ -278,6 +298,7 @@ Inode *create(const char *path, short type, short major, short minor,
               OpContext *ctx)
 {
     /* (Final) TODO BEGIN */
+    // printk("in create\n");
     Inode *ip, *dir;
     char name[FILE_NAME_MAX_LENGTH];
     dir = nameiparent(path, name, ctx);
@@ -285,8 +306,23 @@ Inode *create(const char *path, short type, short major, short minor,
         return NULL;
     }
     inodes.lock(dir);
-    ip = inodes.get(inodes.lookup(dir, name, NULL));
-    if (ip != NULL) {
+    usize inode_no = inodes.lookup(dir, name, NULL);
+    // printk("major: %d\n", major);
+    // printk("in create: inode_no: %lld\n", inode_no);
+    // ip = inodes.get(inodes.lookup(dir, name, NULL));
+    // if (ip != NULL) {
+    //     inodes.unlock(dir);
+    //     inodes.put(ctx, dir);
+    //     inodes.lock(ip);
+    //     if(type == INODE_REGULAR && ip->entry.type == INODE_REGULAR) {
+    //         return ip;
+    //     }
+    //     inodes.unlock(ip);
+    //     inodes.put(ctx, ip);
+    //     return NULL;
+    // }
+    if (inode_no != 0) {
+        ip = inodes.get(inode_no);
         inodes.unlock(dir);
         inodes.put(ctx, dir);
         inodes.lock(ip);
@@ -312,12 +348,14 @@ Inode *create(const char *path, short type, short major, short minor,
     inodes.insert(ctx, dir, name, ip->inode_no);
     inodes.unlock(dir);
     inodes.put(ctx, dir);
+    // printk("create end\n");
     return ip;
     /* (Final) TODO END */
 }
 
 define_syscall(openat, int dirfd, const char *path, int omode)
 {
+    // printk("in syscall openat\n");
     int fd;
     struct file *f;
     Inode *ip;
@@ -393,6 +431,9 @@ define_syscall(mkdirat, int dirfd, const char *path, int mode)
 
 define_syscall(mknodat, int dirfd, const char *path, mode_t mode, dev_t dev)
 {
+    // printk("in syscall mknodat\n");
+    // printk("mode: %d\n", mode);
+    // printk("dev: %ld\n", dev);
     Inode *ip;
     if (!user_strlen(path, 256))
         return -1;
@@ -424,6 +465,7 @@ define_syscall(chdir, const char *path)
      * Change the cwd (current working dictionary) of current process to 'path'.
      * You may need to do some validations.
      */
+    // printk("in syscall chdir\n");
     Inode *ip;
     Proc *p = thisproc();
     OpContext ctx;
@@ -452,6 +494,7 @@ define_syscall(pipe2, int pipefd[2], int flags)
 {
 
     /* (Final) TODO BEGIN */
+    // printk("in syscall pipe2\n");
     File *rf, *wf;
     if(flags){
         return -1;

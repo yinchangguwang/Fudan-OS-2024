@@ -30,7 +30,8 @@ int allocuvm(struct pgdir *pgdir, u64 base, u64 stksz, u64 oldsz, u64 newsz){
 int execve(const char *path, char *const argv[], char *const envp[])
 {
     /* (Final) TODO BEGIN */
-    printk("enter execve\n");
+    printk("enter execve: path: %s\n", path);
+    // printk("path: %s\n", path);
     Proc* p = thisproc();
     struct pgdir old_pgdir = p->pgdir;
     struct pgdir* pgdir = kalloc(sizeof(struct pgdir));
@@ -42,8 +43,9 @@ int execve(const char *path, char *const argv[], char *const envp[])
     OpContext ctx;
     bcache.begin_op(&ctx);
     ip = namei(path, &ctx);
-    printk("namei done\n");
+    // printk("namei done\n");
     if(ip == NULL) {
+        // printk("ip is null\n");
         bcache.end_op(&ctx);
         goto bad;
     }
@@ -91,10 +93,11 @@ int execve(const char *path, char *const argv[], char *const envp[])
         }
         attach_pgdir(pgdir);
         arch_tlbi_vmalle1is();
+        // printk("OK1\n");
         if(inodes.read(ip, (u8*)ph.p_vaddr, ph.p_offset, ph.p_filesz) != ph.p_filesz) {
             PANIC();
         }
-        memset((void*)(ph.p_vaddr + ph.p_filesz), 0, ph.p_memsz - ph.p_filesz);
+        memset((void*)ph.p_vaddr + ph.p_filesz, 0, ph.p_memsz - ph.p_filesz);
         arch_fence();
         arch_dccivac((void*)ph.p_vaddr, ph.p_memsz);
         arch_fence();
@@ -153,6 +156,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
     return 0;
 
 bad:
+    // printk("bad\n");
     if(pgdir) {
         free_pgdir(pgdir);
     }

@@ -2,6 +2,8 @@
 #include <aarch64/intrinsic.h>
 #include <kernel/sched.h>
 #include <driver/uart.h>
+#include <driver/interrupt.h>
+#include <kernel/printk.h>
 
 #define BACKSPACE 0x100
 
@@ -10,8 +12,10 @@ struct console cons;
 void console_init()
 {
     /* (Final) TODO BEGIN */
+    // printk("in console_init\n");
     init_spinlock(&cons.lock);
     init_sem(&cons.sem, 0);
+    set_interrupt_handler(IRQ_AUX, console_intr2);
     /* (Final) TODO END */
 }
 
@@ -34,6 +38,7 @@ void putc(int c){
 isize console_write(Inode *ip, char *buf, isize n)
 {
     /* (Final) TODO BEGIN */
+    // printk("in console_write\n");
     inodes.unlock(ip);
     acquire_spinlock(&cons.lock);
     for(isize i = 0; i < n; i++){
@@ -54,6 +59,7 @@ isize console_write(Inode *ip, char *buf, isize n)
 isize console_read(Inode *ip, char *dst, isize n)
 {
     /* (Final) TODO BEGIN */
+    // printk("in console_read\n");
     inodes.unlock(ip);
     acquire_spinlock(&cons.lock);
     isize m = n;
@@ -66,6 +72,7 @@ isize console_read(Inode *ip, char *dst, isize n)
             }
             release_spinlock(&cons.lock);
             unalertable_wait_sem(&cons.sem);
+            // acquire_spinlock(&cons.lock);
         }
         int c = cons.buf[cons.read_idx % IBUF_SIZE];
         cons.read_idx++;
@@ -88,11 +95,17 @@ isize console_read(Inode *ip, char *dst, isize n)
     /* (Final) TODO END */
 }
 
+void console_intr2(){
+    char c = uart_get_char();
+    console_intr(c);
+}
+
 void console_intr(char c)
 {
     /* (Final) TODO BEGIN */
+    // printk("in console_intr\n");
     acquire_spinlock(&cons.lock);
-    while(c){
+    if(c){
         if(c == C('C')){
             ASSERT(kill(thisproc()->pid) == 0);
         }else if(c == C('U')){

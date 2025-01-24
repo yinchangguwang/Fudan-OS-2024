@@ -30,6 +30,7 @@ NO_RETURN void idle_entry()
 
 NO_RETURN void kernel_entry()
 {
+    // printk("in kernel_entry\n");
     init_filesystem();
 
     printk("Hello world! (Core %lld)\n", cpuid());
@@ -57,8 +58,7 @@ NO_RETURN void kernel_entry()
     Proc* p = create_proc();
     // printk("Create Proc\n");
     for(u64 q = (u64)icode; q < (u64)eicode; q += PAGE_SIZE){
-        auto pte = get_pte(&p->pgdir, 0x400000 + q - (u64)icode, 1);
-        *pte = K2P(q) | PTE_USER_DATA;
+        *get_pte(&p->pgdir, 0x400000 + q - (u64)icode, true) = K2P(q) | PTE_USER_DATA;
     }
     ASSERT(p->pgdir.pt);
     p->ucontext->x[0] = 0;

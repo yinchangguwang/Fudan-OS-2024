@@ -59,7 +59,7 @@ static struct timer hello_timer[4];
 
 static void hello(struct timer *t)
 {
-    printk("CPU %lld: living\n", cpuid());
+    // printk("CPU %lld: living\n", cpuid());
     t->data++;
     set_cpu_timer(&hello_timer[cpuid()]);
 }

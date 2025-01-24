@@ -4,6 +4,7 @@
 #include <kernel/pt.h>
 #include <driver/memlayout.h>
 #include <aarch64/mmu.h>
+#include <kernel/paging.h>
 
 extern struct page refpage[PHYSTOP / PAGE_SIZE];
 
@@ -54,7 +55,12 @@ PTEntriesPtr get_pte(struct pgdir *pgdir, u64 va, bool alloc)
 
 void init_pgdir(struct pgdir *pgdir)
 {
-    pgdir->pt = NULL;
+    // pgdir->pt = NULL;
+    pgdir->pt = kalloc_page();
+    memset(pgdir->pt, 0, PAGE_SIZE);
+    init_spinlock(&pgdir->lock);
+    init_list_node(&pgdir->section_head);
+    init_sections(&pgdir->section_head);
 } 
 
 void free_pt_pages(PTEntriesPtr p, int deep){
@@ -144,4 +150,43 @@ int copyout(struct pgdir *pd, void *va, void *p, usize len)
     }
     return 0;
     /* (Final) TODO END */
+}
+
+struct pgdir*vm_copy(struct pgdir*pgdir){
+    struct pgdir* newpgdir = kalloc(sizeof(struct pgdir));
+    init_pgdir(newpgdir);
+    if (!newpgdir)
+        return 0;
+
+    for (int i = 0; i < N_PTE_PER_TABLE; i++)
+        if (pgdir->pt[i] & PTE_VALID) {
+            ASSERT(pgdir->pt[i] & PTE_TABLE);
+            PTEntriesPtr pgt1 = (PTEntriesPtr)P2K(PTE_ADDRESS(pgdir->pt[i]));
+            for (int i1 = 0; i1 < N_PTE_PER_TABLE; i1++)
+                if (pgt1[i1] & PTE_VALID) {
+                    ASSERT(pgt1[i1] & PTE_TABLE);
+                    PTEntriesPtr pgt2 = (PTEntriesPtr)P2K(PTE_ADDRESS(pgt1[i1]));
+                    for (int i2 = 0; i2 < N_PTE_PER_TABLE; i2++)
+                        if (pgt2[i2] & PTE_VALID) {
+                            ASSERT(pgt2[i2] & PTE_TABLE);
+                            PTEntriesPtr pgt3 = (PTEntriesPtr)P2K(PTE_ADDRESS(pgt2[i2]));
+                            for (int i3 = 0; i3 < N_PTE_PER_TABLE; i3++)
+                                if (pgt3[i3] & PTE_VALID) {
+                                    ASSERT(pgt3[i3] & PTE_PAGE);
+                                    ASSERT(pgt3[i3] & PTE_USER);
+                                    ASSERT(pgt3[i3] & PTE_NORMAL);
+                                    u64 va =(u64)i<<(12+9*3)|(u64)i1<<(12+9*2)|(u64)i2<<(12+9)|i3<<12;
+                                    // u64 pa = P2K(PTE_ADDRESS(pgt3[i3]));
+                                    // vmmap_without_changepd(newpgdir,va,(void*)pa,PTE_RO|PTE_USER_DATA);
+                                    u64 pa=PTE_ADDRESS(pgt3[i3]);
+                                    void* np=kalloc_page();
+                                    ASSERT(np);
+                                    memmove(np,(void*)P2K(pa),PAGE_SIZE);
+                                    auto pte = get_pte(newpgdir, va, true);
+                                    *pte = K2P(np) | PTE_USER_DATA;
+                                }
+                        }
+                }
+        }
+    return newpgdir;
 }

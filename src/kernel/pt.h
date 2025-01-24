@@ -16,3 +16,5 @@ void free_pgdir(struct pgdir *pgdir);
 void attach_pgdir(struct pgdir *pgdir);
 void vmmap(struct pgdir *pd, u64 va, void *ka, u64 flags);
 int copyout(struct pgdir *pd, void *va, void *p, usize len);
+
+struct pgdir*vm_copy(struct pgdir*pagdir);
