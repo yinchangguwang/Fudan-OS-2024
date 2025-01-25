@@ -258,99 +258,68 @@ int fork()
      * 6. Activate the new proc and return its pid.
      */
     // printk("in fork\n");
-    // Proc* child = create_proc();
-    // Proc* parent = thisproc();
-    // if(child == NULL){
-    //     return -1;
-    // }
-    // // struct pgdir* temp = vm_copy(&parent->pgdir);
-    // struct pgdir* temp = kalloc(sizeof(struct pgdir));
-    // init_pgdir(temp);
-    // if(temp != NULL) {
-    //     for(int i = 0; i < N_PTE_PER_TABLE; i++) {
-    //         if(parent->pgdir.pt[i] & PTE_VALID){
-    //             ASSERT(parent->pgdir.pt[i] & PTE_TABLE);
-    //             PTEntriesPtr pgt1 = (PTEntriesPtr)P2K(PTE_ADDRESS(parent->pgdir.pt[i]));
-    //             for(int i1 = 0; i1 < N_PTE_PER_TABLE; i1++) {
-    //                 if(pgt1[i1] & PTE_VALID){
-    //                     ASSERT(pgt1[i1] & PTE_TABLE);
-    //                     PTEntriesPtr pgt2 = (PTEntriesPtr)P2K(PTE_ADDRESS(pgt1[i1]));
-    //                     for(int i2 = 0; i2 < N_PTE_PER_TABLE; i2++){
-    //                         if(pgt2[i2] & PTE_VALID){
-    //                             ASSERT(pgt2[i2] & PTE_TABLE);
-    //                             PTEntriesPtr pgt3 = (PTEntriesPtr)P2K(PTE_ADDRESS(pgt2[i2]));
-    //                             for(int i3 = 0; i3 < N_PTE_PER_TABLE; i3++){
-    //                                 if(pgt3[i3] & PTE_VALID) {
-    //                                     ASSERT(pgt3[i3] & PTE_PAGE);
-    //                                     ASSERT(pgt3[i3] & PTE_USER);
-    //                                     ASSERT(pgt3[i3] & PTE_NORMAL);
-    //                                     u64 va = (u64)i << 39 | (u64)i1 << 30 | (u64)i2 << 21 | (u64)i3 << 12;
-    //                                     u64 pa = PTE_ADDRESS(pgt3[i3]);
-    //                                     void* np = kalloc_page();
-    //                                     ASSERT(np != NULL);
-    //                                     memmove(np, (void*)P2K(pa), PAGE_SIZE);
-    //                                     auto pte = get_pte(temp, va, true);
-    //                                     *pte = K2P(np) | PTE_USER_DATA;
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }else{
-    //     kfree(child->kstack);
-    //     acquire_spinlock(&plock);
-    //     child->state = UNUSED;
-    //     release_spinlock(&plock);
-    //     return -1;
-    // }
-    // child->pgdir = *temp;
-    // child->parent = parent;
-    // memmove(child->ucontext, parent->ucontext, sizeof(*child->ucontext));
-    // child->ucontext->x[0] = 0;
-    // for(int i = 0; i < 16; i++){
-    //     if(parent->oftable.openfile[i]) {
-    //         child->oftable.openfile[i] = file_dup(parent->oftable.openfile[i]);
-    //     }
-    // }
-    // child->cwd = inodes.share(parent->cwd);
-    // int pid = child->pid;
-    // acquire_spinlock(&plock);
-    // _insert_into_list(&parent->children, &child->ptnode);
-    // release_spinlock(&plock);
-    // start_proc(child, trap_return, 0);
-    // return pid;
-    Proc* cp=thisproc();
-    Proc* np=create_proc();
-    if (np==NULL){
+    Proc* child = create_proc();
+    Proc* parent = thisproc();
+    if(child == NULL){
         return -1;
     }
-    struct pgdir* temp=vm_copy(&cp->pgdir);
-    if (temp==NULL){
-        // attention
-        kfree(np->kstack);
+    struct pgdir* temp = kalloc(sizeof(struct pgdir));
+    init_pgdir(temp);
+    if(temp != NULL) {
+        for(int i = 0; i < N_PTE_PER_TABLE; i++) {
+            if(parent->pgdir.pt[i] & PTE_VALID){
+                ASSERT(parent->pgdir.pt[i] & PTE_TABLE);
+                PTEntriesPtr pgt1 = (PTEntriesPtr)P2K(PTE_ADDRESS(parent->pgdir.pt[i]));
+                for(int i1 = 0; i1 < N_PTE_PER_TABLE; i1++) {
+                    if(pgt1[i1] & PTE_VALID){
+                        ASSERT(pgt1[i1] & PTE_TABLE);
+                        PTEntriesPtr pgt2 = (PTEntriesPtr)P2K(PTE_ADDRESS(pgt1[i1]));
+                        for(int i2 = 0; i2 < N_PTE_PER_TABLE; i2++){
+                            if(pgt2[i2] & PTE_VALID){
+                                ASSERT(pgt2[i2] & PTE_TABLE);
+                                PTEntriesPtr pgt3 = (PTEntriesPtr)P2K(PTE_ADDRESS(pgt2[i2]));
+                                for(int i3 = 0; i3 < N_PTE_PER_TABLE; i3++){
+                                    if(pgt3[i3] & PTE_VALID) {
+                                        ASSERT(pgt3[i3] & PTE_PAGE);
+                                        ASSERT(pgt3[i3] & PTE_USER);
+                                        ASSERT(pgt3[i3] & PTE_NORMAL);
+                                        u64 va = ((u64)i << 39) | ((u64)i1 << 30) | ((u64)i2 << 21) | ((u64)i3 << 12);
+                                        u64 pa = PTE_ADDRESS(pgt3[i3]);
+                                        void* np = kalloc_page();
+                                        ASSERT(np != NULL);
+                                        memmove(np, (void*)P2K(pa), PAGE_SIZE);
+                                        auto pte = get_pte(temp, va, true);
+                                        *pte = K2P(np) | PTE_USER_DATA;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }else{
+        kfree(child->kstack);
         acquire_spinlock(&plock);
-        np->state=UNUSED;
+        child->state = UNUSED;
         release_spinlock(&plock);
         return -1;
     }
-    np->pgdir=*temp;
-    // np->container=cp->container;
-    np->parent=cp;
-    memmove(np->ucontext, cp->ucontext, sizeof(*np->ucontext));
-    // Fork returns 0 in the child.
-    np->ucontext->x[0] = 0;
-    for (int i = 0; i < 16; i++)
-        if (cp->oftable.openfile[i])
-            np->oftable.openfile[i] = file_dup(cp->oftable.openfile[i]);
-    np->cwd = inodes.share(cp->cwd);
-    int pid = np->pid;
+    child->pgdir = *temp;
+    child->parent = parent;
+    memmove(child->ucontext, parent->ucontext, sizeof(*child->ucontext));
+    child->ucontext->x[0] = 0;
+    for(int i = 0; i < 16; i++){
+        if(parent->oftable.openfile[i]) {
+            child->oftable.openfile[i] = file_dup(parent->oftable.openfile[i]);
+        }
+    }
+    child->cwd = inodes.share(parent->cwd);
+    int pid = child->pid;
     acquire_spinlock(&plock);
-    _insert_into_list(&cp->children,&np->ptnode);
+    _insert_into_list(&parent->children, &child->ptnode);
     release_spinlock(&plock);
-    start_proc(np,trap_return,0);
+    start_proc(child, trap_return, 0);
     return pid;
     /* (Final) TODO END */
 }

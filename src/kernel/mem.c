@@ -158,10 +158,3 @@ WARN_RESULT void* get_zero_page() {
 u64 left_page_cnt() {
     return pagenum - kalloc_page_cnt.count;
 }
-
-
-void read_page_from_disk(void *ka, u32 bno) {
-    for(int i = 0; i < 8; i++){
-        block_device.read(bno + i, (u8*)ka + i * BLOCK_SIZE);
-    }
-}

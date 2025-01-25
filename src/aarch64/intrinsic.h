@@ -94,11 +94,6 @@ static ALWAYS_INLINE void arch_fence()
     arch_isb();
 }
 
-/* Data cache clean and invalidate by virtual address to point of coherency. */
-static ALWAYS_INLINE void arch_dccivac(void* p, int n) {
-    while (n--)
-        asm volatile("dc civac, %[x]" : : [x] "r"(p + n));
-}
 
 /**
  * The `device_get/put_*` functions do not require protection using

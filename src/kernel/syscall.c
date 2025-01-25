@@ -43,8 +43,6 @@ void syscall_entry(UserContext *context)
  */
 bool user_readable(const void *start, usize size) {
     /* (Final) TODO BEGIN */
-    start = start;
-    size = size;
     return true;
     /* (Final) TODO END */
 }
@@ -56,15 +54,13 @@ bool user_readable(const void *start, usize size) {
  */
 bool user_writeable(const void *start, usize size) {
     /* (Final) TODO Begin */
-    bool ret = true;
     for(u64 i = (u64)start; i < (u64)start + size; i = (i / BLOCK_SIZE + 1) * BLOCK_SIZE){
         auto pte = get_pte(&thisproc()->pgdir, i, false);
         if(pte == NULL || ((*pte) & PTE_RO)){
-            ret = false;
-            break;
+            return false;
         }
     }
-    return ret;
+    return true;
     /* (Final) TODO End */
 }
 

@@ -30,7 +30,7 @@ int allocuvm(struct pgdir *pgdir, u64 base, u64 stksz, u64 oldsz, u64 newsz){
 int execve(const char *path, char *const argv[], char *const envp[])
 {
     /* (Final) TODO BEGIN */
-    printk("enter execve: path: %s\n", path);
+    // printk("enter execve: path: %s\n", path);
     // printk("path: %s\n", path);
     Proc* p = thisproc();
     struct pgdir old_pgdir = p->pgdir;
@@ -98,9 +98,6 @@ int execve(const char *path, char *const argv[], char *const envp[])
             PANIC();
         }
         memset((void*)ph.p_vaddr + ph.p_filesz, 0, ph.p_memsz - ph.p_filesz);
-        arch_fence();
-        arch_dccivac((void*)ph.p_vaddr, ph.p_memsz);
-        arch_fence();
     }
     inodes.unlock(ip);
     inodes.put(&ctx, ip);
@@ -152,7 +149,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
     attach_pgdir(&p->pgdir);
     arch_tlbi_vmalle1is();
     free_pgdir(&old_pgdir);
-    printk("exit execve\n");
+    // printk("exit execve\n");
     return 0;
 
 bad:

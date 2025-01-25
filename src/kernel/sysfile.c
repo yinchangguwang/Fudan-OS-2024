@@ -53,17 +53,10 @@ int fdalloc(struct file *f)
 {
     /* (Final) TODO BEGIN */
     // printk("in fdalloc\n");
-    // Proc* p = thisproc();
-    // for(int fd = 0; fd < 16; fd++) {
-    //     if(p->oftable.openfile[fd] == 0) {
-    //         p->oftable.openfile[fd] = f;
-    //         return fd;
-    //     }
-    // }
-    struct oftable* ft = &(thisproc()->oftable);
+    Proc* p = thisproc();
     for(int i = 0; i < 16; i++) {
-        if(ft->openfile[i] == NULL) {
-            ft->openfile[i] = f;
+        if(p->oftable.openfile[i] == 0) {
+            p->oftable.openfile[i] = f;
             return i;
         }
     }
@@ -81,18 +74,84 @@ define_syscall(ioctl, int fd, u64 request)
     return 0;
 }
 
+void get_free_vm(struct pgdir* pd, u64 length, u64* begin, u64* end){
+    // get vm area between heap and userstack section
+    // a file must auto-mmapped at the top of the area
+    *end = (u64)-1;
+    _for_in_list(p, &pd->section_head){
+        if(p != &pd->section_head){
+            auto st = container_of(p, struct section, stnode);
+            if(st->flags == ST_HEAP)*begin = st->end;
+            if(st->flags == (1 << 6) 
+                || st->flags == (1 << 5)
+                || st->flags == (1 << 4))*end = MIN(*end, st->begin);
+        }
+    }
+    if(*end - *begin < length){
+        // to fix
+        *begin = *end = 0;
+    }
+    else *begin = *end - length;
+}
+
 define_syscall(mmap, void *addr, int length, int prot, int flags, int fd,
                int offset)
 {
     /* (Final) TODO BEGIN */
     // printk("in syscall mmap\n");
-    addr = addr;
-    length = length;
-    prot = prot;
-    flags = flags;
-    fd = fd;
-    offset = offset;
     return 0;
+    // if(prot == PROT_NONE || prot&PROT_EXEC || fd < 0 || fd >= 16 || length <= 0)return -1;
+    // auto st = (struct section*)kalloc(sizeof(struct section));
+    // memset(st, 0, sizeof(struct section));
+    // st->flags = flags == MAP_SHARED ? (1 << 5) : (1 << 6);
+
+    // auto this = thisproc();
+    // auto f = fd2file(fd);
+    // if(!f){
+    //     kfree(st);
+    //     return -1;
+    // }
+
+    // if((prot & PROT_WRITE) && !f->writable && flags != MAP_PRIVATE){
+    //     kfree(st);
+    //     return -1;
+    // }
+
+    // st->fp = file_dup(f);
+
+    // acquire_spinlock(&this->pgdir.lock);
+    // if(addr == 0){
+    //     u64 free_begin, free_end;
+    //     get_free_vm(&this->pgdir, length, &free_begin, &free_end);
+    //     if(free_end == free_begin){
+    //         // can not find an area
+    //         kfree(st);
+    //         release_spinlock(&this->pgdir.lock);
+    //         return -1;
+    //     }
+    //     st->end = free_end;
+    //     st->begin = st->end - (u64)length;
+    // }
+    // else{
+    //     _for_in_list(p, &this->pgdir.section_head){
+    //         if(p != &this->pgdir.section_head){
+    //             auto sec = container_of(p, struct section, stnode);
+    //             if(sec->begin < (u64)addr + (u64)length && (u64)addr < sec->end){
+    //                 kfree(st);
+    //                 release_spinlock(&this->pgdir.lock);
+    //                 return -1;
+    //             }
+    //         }
+    //     }
+    //     st->begin = (u64)addr;
+    //     st->end = st->begin + (u64)length;
+    // }
+    // st->length = (u64)length;
+    // st->offset = (int)offset;
+    // _insert_into_list(&this->pgdir.section_head, &st->stnode);
+    // st->prot = prot;
+    // release_spinlock(&this->pgdir.lock);
+    // return st->begin;
     /* (Final) TODO END */
 }
 
@@ -101,6 +160,45 @@ define_syscall(munmap, void *addr, size_t length)
     /* (Final) TODO BEGIN */
     // printk("in syscall munmap\n");
     return (u64)addr + length;
+    // auto this = thisproc();
+    // acquire_spinlock(&this->pgdir.lock);
+    // _for_in_list(p, &this->pgdir.section_head){
+    //     if(p != &this->pgdir.section_head){
+    //         auto st = container_of(p, struct section, stnode);
+    //         if((u64)addr == st->begin){
+    //             ASSERT(st->flags == (1 << 6) || st->flags == (1 << 5));
+    //             ASSERT(st->fp);
+    //             if(length >= st->end - st->begin){
+    //                 free_section_pages(&this->pgdir, st);
+    //                 _detach_from_list(p);
+    //                 file_close(st->fp);
+    //                 kfree(st);
+    //             }
+    //             else {
+    //                 auto end = st->begin + length;
+    //                 for(auto i = PAGE_BASE(st->begin); i < end; i += PAGE_SIZE){
+    //                     auto pte = get_pte(&this->pgdir, i, false);
+    //                     if(st->fp->type == FD_INODE && get_page_ref(P2K(PTE_ADDRESS(*pte))) == 1){
+    //                         u64 this_begin = MAX(i, st->begin);
+    //                         u64 this_end = MIN(i + PAGE_SIZE, end);
+    //                         st->fp->off = st->offset + this_begin - st->begin;
+    //                         file_write(st->fp, (char*)P2K(PTE_ADDRESS(*pte)), MIN((u64)PAGE_SIZE, this_end - this_begin));
+    //                     }
+    //                     else if(st->fp->type == FD_PIPE){
+    //                         PANIC();
+    //                     }
+    //                     else PANIC();
+    //                     kfree_page((void*)P2K(PTE_ADDRESS(*pte)));
+    //                     *pte = 0;
+    //                 }
+    //                 st->begin = end;
+    //             }
+    //             break;
+    //         }
+    //     }
+    // }
+    // release_spinlock(&this->pgdir.lock);
+    // return 0;
     /* (Final) TODO END */
 }
 
@@ -334,6 +432,7 @@ Inode *create(const char *path, short type, short major, short minor,
         return NULL;
     }
     ip = inodes.get(inodes.alloc(ctx, type));
+    ASSERT(ip != NULL);
     inodes.lock(ip);
     ip->entry.major = major;
     ip->entry.minor = minor;
@@ -466,11 +565,10 @@ define_syscall(chdir, const char *path)
      * You may need to do some validations.
      */
     // printk("in syscall chdir\n");
-    Inode *ip;
     Proc *p = thisproc();
     OpContext ctx;
     bcache.begin_op(&ctx);
-    ip = namei(path, &ctx);
+    Inode* ip = namei(path, &ctx);
     if(ip == NULL) {
         bcache.end_op(&ctx);
         return -1;

@@ -34,8 +34,8 @@ struct file* file_alloc() {
     // printk("in file_alloc\n");
     acquire_spinlock(&ftable.lock);
     for(int i = 0; i < NFILE; i++) {
-        // if(ftable.filelist[i].ref == 0) {
-        if(ftable.filelist[i].ref == 0 && ftable.filelist[i].type == FD_NONE) {
+        if(ftable.filelist[i].ref == 0) {
+        // if(ftable.filelist[i].ref == 0 && ftable.filelist[i].type == FD_NONE) {
             ftable.filelist[i].ref = 1;
             release_spinlock(&ftable.lock);
             return &(ftable.filelist[i]);
@@ -52,7 +52,7 @@ struct file* file_dup(struct file* f) {
     // printk("in file_dup\n");
     acquire_spinlock(&ftable.lock);
     ASSERT(f->ref >= 1);
-    f->ref += 1;
+    f->ref++;
     release_spinlock(&ftable.lock);
     /* (Final) TODO END */
     return f;
@@ -69,34 +69,17 @@ void file_close(struct file* f) {
         release_spinlock(&ftable.lock);
         return;
     }
-    // struct file now = *f;
-    // f->type = FD_NONE;
-    // release_spinlock(&ftable.lock);
-    // if(now.type == FD_PIPE) {
-    //     pipe_close(now.pipe, now.writable);
-    // } else if(now.type == FD_INODE) {
-    //     OpContext ctx;
-    //     bcache.begin_op(&ctx);
-    //     inodes.put(&ctx, now.ip);
-    //     bcache.end_op(&ctx);
-    // }
-    if(f->type == FD_PIPE) {
-        pipe_close(f->pipe, f->writable);
-    }else if(f->type == FD_INODE){
-        if(f->ip){
-            release_spinlock(&ftable.lock);
-            OpContext ctx;
-            bcache.begin_op(&ctx);
-            inodes.put(&ctx, f->ip);
-            bcache.end_op(&ctx);
-            acquire_spinlock(&ftable.lock);
-        }
-    }
+    struct file now = *f;
     f->type = FD_NONE;
-    f->ref = 0;
-    f->readable = 0;
-    f->writable = 0;
     release_spinlock(&ftable.lock);
+    if(now.type == FD_PIPE) {
+        pipe_close(now.pipe, now.writable);
+    }else if(now.type == FD_INODE) {
+        OpContext ctx;
+        bcache.begin_op(&ctx);
+        inodes.put(&ctx, now.ip);
+        bcache.end_op(&ctx);
+    }
     /* (Final) TODO END */
 }
 
@@ -118,7 +101,8 @@ int file_stat(struct file* f, struct stat* st) {
 isize file_read(struct file* f, char* addr, isize n) {
     /* (Final) TODO BEGIN */
     // printk("in file_read\n");
-    if(f->readable == 0 || f->type == FD_NONE) {
+    // if(f->readable == 0 || f->type == FD_NONE) {
+    if(f->readable == 0) {
         return -1;
     }
     if(f->type == FD_PIPE) {
@@ -127,8 +111,10 @@ isize file_read(struct file* f, char* addr, isize n) {
     if(f->type == FD_INODE) {
         isize r = 0;
         inodes.lock(f->ip);
-        r = (isize)inodes.read(f->ip, (u8*)addr, f->off, n);
-        f->off += r;
+        r = inodes.read(f->ip, (u8*)addr, f->off, n);
+        if(r > 0){
+            f->off += r;
+        }
         inodes.unlock(f->ip);
         return r;
     }
@@ -141,7 +127,8 @@ isize file_read(struct file* f, char* addr, isize n) {
 isize file_write(struct file* f, char* addr, isize n) {
     /* (Final) TODO BEGIN */
     // printk("in file_write\n");
-    if(f->writable == 0 || f->type == FD_NONE || n < 0) {
+    // if(f->writable == 0 || f->type == FD_NONE || n < 0) {
+    if(f->writable == 0) {
         return -1;
     }
     if(f->type == FD_PIPE) {

@@ -24,6 +24,7 @@ struct section {
     struct file *fp;
     u64 offset; // Offset in file
     u64 length; // Length of mapped content in file
+    u64 prot;
 };
 
 int pgfault_handler(u64 iss);
