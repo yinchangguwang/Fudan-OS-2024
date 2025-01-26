@@ -105,9 +105,6 @@ isize file_read(struct file* f, char* addr, isize n) {
     if(f->readable == 0) {
         return -1;
     }
-    if(f->type == FD_PIPE) {
-        return pipe_read(f->pipe, (u64)addr, n);
-    }
     if(f->type == FD_INODE) {
         isize r = 0;
         inodes.lock(f->ip);
@@ -117,6 +114,9 @@ isize file_read(struct file* f, char* addr, isize n) {
         }
         inodes.unlock(f->ip);
         return r;
+    }
+    if(f->type == FD_PIPE) {
+        return pipe_read(f->pipe, (u64)addr, n);
     }
     PANIC();
     /* (Final) TODO END */
@@ -130,9 +130,6 @@ isize file_write(struct file* f, char* addr, isize n) {
     // if(f->writable == 0 || f->type == FD_NONE || n < 0) {
     if(f->writable == 0) {
         return -1;
-    }
-    if(f->type == FD_PIPE) {
-        return pipe_write(f->pipe, (u64)addr, n);
     }
     if(f->type == FD_INODE) {
         isize maxbytes = ((OP_MAX_NUM_BLOCKS - 4) / 2) * BLOCK_SIZE;
@@ -158,6 +155,9 @@ isize file_write(struct file* f, char* addr, isize n) {
             return n;
         }
         return -1;
+    }
+    if(f->type == FD_PIPE) {
+        return pipe_write(f->pipe, (u64)addr, n);
     }
     /* (Final) TODO END */
     return 0;

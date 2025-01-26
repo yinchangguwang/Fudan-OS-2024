@@ -155,7 +155,9 @@ void console_intr(char c)
             }
         }else{
             if(c != 0 && cons.edit_idx - cons.read_idx < IBUF_SIZE){
-                c = (c == '\r') ? '\n' : c;
+                if(c == '\r'){
+                    c = '\n';
+                }
                 cons.buf[cons.edit_idx % IBUF_SIZE] = c;
                 cons.edit_idx++;
                 putc(c);

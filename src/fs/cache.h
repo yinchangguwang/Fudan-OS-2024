@@ -253,6 +253,3 @@ extern BlockCache bcache;
     @note You may want to put it into `*_init` method groups.
  */
 void init_bcache(const SuperBlock *sblock, const BlockDevice *device);
-
-void release_8_blocks(u32 bno);
-u32 find_and_set_8_blocks();

@@ -346,30 +346,3 @@ BlockCache bcache = {
     .alloc = cache_alloc,
     .free = cache_free,
 };
-
-static bool inuse[200];
-
-void release_8_blocks(u32 bno) {
-    for(int i = 0; i < 8; i++){
-        inuse[bno - 800 + i] = 0;
-    }
-}
-
-u32 find_and_set_8_blocks() {
-    for(int i = 0; i < 200 - 8; i++){
-        int j;
-        for(j = 0; j < 8; j++){
-            if(inuse[i + j]){
-                break;
-            }
-        }
-        if(j == 8){
-            for(j = 0; j < 8; j++){
-                inuse[i + j] = 1;
-            }
-            return i + 800;
-        }
-    }
-    PANIC();
-    return 0;
-}

@@ -59,14 +59,14 @@ u64 sbrk(i64 size) {
     /* (Final) TODO END */
 }
 
-void* alloc_page_for_user(){
+void* user_page_alloc(){
     while(left_page_cnt() <= 1024) {
         return NULL;
     }
     return kalloc_page();
 }
 
-void swapin(struct pgdir *pd, struct section *sec) {
+void load_swapped_pages(struct pgdir *pd, struct section *sec) {
     ASSERT(sec->flags & ST_SWAP);
     unalertable_wait_sem(&sec->sleepLock);
     u64 begin = sec->begin;
@@ -75,12 +75,11 @@ void swapin(struct pgdir *pd, struct section *sec) {
         auto pte = get_pte(pd, i, 0);
         if(pte && (*pte)) {
             u32 bno = (*pte);
-            void* newpage = alloc_page_for_user();
+            void* newpage = user_page_alloc();
             for(int i = 0; i < 8; i++){
                 block_device.read((u32)bno + i, (u8*)newpage + i * BLOCK_SIZE);
             }
             *pte = K2P(newpage) | PTE_USER_DATA;
-            release_8_blocks(bno);
         }
     }
     attach_pgdir(pd);
@@ -117,18 +116,18 @@ int pgfault_handler(u64 iss) {
     auto pte = get_pte(pd, addr, 1);
     if(*pte == NULL) {
         if(sec->flags & ST_SWAP) {
-            swapin(pd, sec);
+            load_swapped_pages(pd, sec);
         }else{
-            *pte = K2P(alloc_page_for_user()) | PTE_USER_DATA;
+            *pte = K2P(user_page_alloc()) | PTE_USER_DATA;
         }
     }else if(*pte & PTE_RO){
-        auto p = alloc_page_for_user();
+        auto p = user_page_alloc();
         kfree_page((void*)P2K(PTE_ADDRESS(*pte)));
         memmove(p, (void*)P2K(PTE_ADDRESS(*pte)), PAGE_SIZE);
         ASSERT(p != NULL);
         *pte = K2P(p) | PTE_USER_DATA;
     }else if(!(*pte & PTE_VALID) && (sec->flags & ST_SWAP)){
-        swapin(pd, sec);
+        load_swapped_pages(pd, sec);
     }
     attach_pgdir(pd);
     arch_tlbi_vmalle1is();

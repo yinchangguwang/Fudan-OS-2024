@@ -66,7 +66,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
     Elf64_Phdr ph;
     p->pgdir = *pgdir;
     u64 sz = 0, base = 0, stksz = 0;
-    int first = 1;
+    bool temp = true;
     for(i = 0, off = elf.e_phoff; i < elf.e_phnum; i++, off += sizeof(ph)) {
         if(inodes.read(ip, (u8*)&ph, off, sizeof(ph)) != sizeof(ph)) {
             PANIC();
@@ -74,15 +74,12 @@ int execve(const char *path, char *const argv[], char *const envp[])
         if(ph.p_type != PT_LOAD) {
             continue;
         }
-        if(ph.p_memsz < ph.p_filesz) {
+        if(ph.p_memsz < ph.p_filesz || ph.p_vaddr + ph.p_memsz < ph.p_vaddr) {
             PANIC();
         }
-        if(ph.p_vaddr + ph.p_memsz < ph.p_vaddr) {
-            PANIC();
-        }
-        if(first) {
+        if(temp) {
             sz = base = ph.p_vaddr;
-            first = 0;
+            temp = false;
             if(base % PAGE_SIZE != 0) {
                 PANIC();
             }
@@ -109,17 +106,19 @@ int execve(const char *path, char *const argv[], char *const envp[])
     int argc = 0;
     int envc = 0;
     if(argv){
-        for(; argc < MAXARG && argv[argc]; argc++){
+        while(argc < MAXARG && argv[argc]){
             usize len = strlen(argv[argc]) + 1;
             sp -= len;
             copyout(pgdir, sp, argv[argc], len);
+            argc++;
         }
     }
     if(envp){
-        for(; envc < MAXARG && envp[envc]; envc++){
+        while(envc < MAXARG && envp[envc]){
             usize len = strlen(envp[envc]) + 1;
             sp -= len;
             copyout(pgdir, sp, envp[envc], len);
+            envc++;
         }
     }
     void* newsp = (void*)(((usize)sp - (envc + argc + 4) * 8) / 16 * 16);
