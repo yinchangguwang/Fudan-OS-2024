@@ -6,8 +6,14 @@
 #include <kernel/printk.h>
 
 #define BACKSPACE 0x100
+#define MAX_HISTORY 10
+#define MAX_CMD_LEN 256
 
 struct console cons;
+// char history[MAX_HISTORY][MAX_CMD_LEN];
+// int history_count = 0;
+// int history_index = -1;
+// usize cursor_pos = 0;
 
 void console_init()
 {
@@ -28,6 +34,35 @@ void putc(int c){
         uart_put_char(c);
     }
 }
+
+// void move_cursor_left() {
+//     if (cursor_pos > 0) {
+//         cursor_pos--;
+//         uart_put_char('\b');
+//     }
+// }
+
+// void move_cursor_right() {
+//     if (cursor_pos < cons.edit_idx) {
+//         uart_put_char(cons.buf[cursor_pos % IBUF_SIZE]);
+//         cursor_pos++;
+//     }
+// }
+
+// void load_history(int index) {
+//     if (index >= 0 && index < history_count) {
+//         while (cons.edit_idx > 0) {
+//             cons.edit_idx--;
+//             putc(BACKSPACE);
+//         }
+//         strncpy(cons.buf, history[index], MAX_CMD_LEN);
+//         cons.edit_idx = strlen(history[index]);
+//         cursor_pos = cons.edit_idx;
+//         for (usize i = 0; i < cons.edit_idx; i++) {
+//             putc(cons.buf[i]);
+//         }
+//     }
+// }
 
 /**
  * console_write - write to uart from the console buffer.
